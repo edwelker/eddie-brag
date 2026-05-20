@@ -1,79 +1,166 @@
-# Brag
+# eddie-brag
 
-## Description
+Staff-level professional accomplishment tracker for performance reviews.
 
-Brag is a command-line interface (CLI) tool that allows you to write and manage entries in a brag document. Use it to keep track of your accomplishments, milestones, or anything you want to brag about!
+## What This Is
+
+A CLI tool for tracking work accomplishments with two workflows:
+- **Daily capture** (`brag add`) — frictionless, just bucket/description/evidence
+- **Weekly synthesis** (`brag enrich`) — add hours saved, business impact, strategic alignment
+
+Data auto-syncs to a private GitHub repo. Never lose your career history.
 
 ## Installation
 
-1. Make sure you have Go installed on your system. You can download it from the official Go website: https://golang.org/
+```bash
+git clone https://github.com/edwelker/eddie-brag.git
+cd eddie-brag
+go build -o brag ./cmd/brag/
+# Move to PATH
+mv brag ~/bin/  # or wherever you keep binaries
+```
 
-2. Clone the brag repository to your local machine:
-`git clone https://github.com/BrunoPansani/brag.git`
+Or install directly:
+```bash
+go install github.com/edwelker/eddie-brag/cmd/brag@latest
+```
 
-3. Navigate to the project directory:
-`cd brag`
+## Quick Start
 
-4. Build the Go executable:
-`go build ./cmd/brag`
+```bash
+# One-time setup
+brag init
+# Enter your role start date (YYYY-MM-DD)
 
-5. (Optional) Add the `brag` executable to your system's PATH to run it from anywhere.
-  1. In the terminal, run `pwd` to get the current directory.
-  2. Use a text editor to open your shell configuration file. For macOS, it is typically `~/.bash_profile` or `~/.zshrc`. For Linux, it can be `~/.bashrc` or `~/.zshrc`.
-  3. Add the following line to the configuration file, replacing `/path/to/brag` with the actual path to the brag executable:
-`export PATH="/path/to/brag:$PATH"`
-  4. Run `source ~/.bash_profile` (or the relevant configuration file) to apply the changes to the current session. Alternatively, you can close and reopen the terminal window.
-  5. Type brag in the terminal to verify that the command is recognized and executable from anywhere.
+# Daily: log an accomplishment
+brag add
 
-## Usage
+# Weekly: enrich entries with metrics
+brag enrich
 
-The `brag` CLI provides several commands to manage your brag document. Here are the available commands:
+# View last 7 days
+brag list
 
-- `init`: Initializes the brag document.
-- `add <entry>`: Adds a new entry to the brag document.
-- `list`: Lists all entries in the brag document.
-- `remove <id>`: Removes the entry with the specified ID.
-- `clear`: Clears all entries from the brag document.
-- `export <format>`: Exports the brag document to the specified format (txt, csv, json).
-- `help`: Displays help information.
+# Generate month 3 report for review prep
+brag report --month 3
+```
 
-To run a command, open a terminal or command prompt and navigate to the project directory.
+## Daily Workflow
 
-Here are some examples of how to use the `brag` CLI:
+```bash
+# Interactive (default)
+brag add
 
-- Initialize the brag document:
+# Flag-based (for scripting)
+brag add -b Delivery -d "Shipped feature X" -e "https://jira.example.com/PROJ-123"
 
-`./brag init`
+# Backfill past work
+brag add --week 1 -b Process -d "Fixed CI bottleneck" -e "https://..."
+```
 
-- Add a new entry to the brag document:`
+## Weekly Enrichment
 
-`./brag add "I completed a challenging project today."`
+```bash
+# Find unenriched entries from last 7 days
+brag enrich
 
-- List all entries in the brag document:
+# Check what needs attention
+brag enrich --pending
 
-`./brag list`
+# Enrich last 30 days
+brag enrich --range 30d
 
-- Remove an entry from the brag document:
+# Enrich specific entry
+brag enrich --id 42
+```
 
-`./brag remove 1`
+Enrichment prompts:
+- Hours Saved (accepts `1.5`, `90m`, `2h`)
+- Business Metric (e.g., "Reduced P95 latency by 200ms")
+- Strategic Alignment (e.g., "Q2 OKR: Improve developer velocity")
+- Peer Recognition (e.g., "Slack kudos from @manager")
 
-- Clear all entries from the brag document:
+## Viewing & Reporting
 
-`./brag clear`
+```bash
+# Last 7 days (default)
+brag list
 
-- Export the brag document to a specific format (txt, csv, json):
+# Specific time periods
+brag list --month 3
+brag list --week 12
+brag list --range 90d
+brag list --all
 
-`./brag export txt`
+# Generate review-ready report
+brag report --month 3  # Grouped by bucket with totals
+brag report --year 1   # Full first year summary
 
-`./brag export csv`
+# Export to file
+brag export --format csv --month 3
+brag export --format json --all
+```
 
-`./brag export json`
+## Data Storage & Backup
 
-- Display help information:
+- Data lives at `~/.config/eddie-brag/brag.json`
+- Every write auto-commits and pushes to `edwelker/brag-data` (private repo)
+- Full git history means you can recover from corruption or accidental edits
+- If offline: commits locally, retries push on next write
 
-`./brag help`
+## Zsh Aliases
 
-Note: If you added the `brag` executable to your system's PATH, you can simply use `brag` instead of `./brag` in the above commands.
+Add to `~/.zshrc`:
 
-That's it! You're now ready to start using the `brag` CLI to manage your brag document.
+```bash
+alias bradd='brag add'
+alias bragf='brag enrich'
+alias bragl='brag list'
+alias bragr='brag report'
 
+# Weekly export to Markdown for review doc
+function brag-weekly() {
+  brag export --format txt --range 7d
+  cat ~/.config/eddie-brag/brag.txt | pbcopy
+  echo "Last 7 days copied to clipboard"
+}
+```
+
+## Help System
+
+```bash
+brag help           # Overview
+brag help add       # Detailed add usage
+brag help enrich    # Detailed enrich usage
+brag help list      # List flags
+brag help report    # Report options
+brag help export    # Export formats
+```
+
+## Architecture (for Go learners)
+
+```
+cmd/brag/
+  main.go       - CLI dispatcher
+  commands.go   - Command handlers
+  prompts.go    - Interactive survey logic
+  help.go       - Help text
+
+internal/brag/
+  brag.go       - Domain logic, storage, validation
+  brag_test.go  - Unit tests
+
+.github/workflows/
+  test.yml      - CI (runs on macOS + Ubuntu)
+```
+
+Key design decisions:
+- `time.Local` everywhere (no UTC drift on week/month boundaries)
+- Self-healing `NextID` (protects against manual JSON edits)
+- `EnrichedAt` timestamp (prevents infinite re-prompt loop)
+- URL validation treats 401/403 as valid (internal tools are auth-protected)
+- Auto git commit+push on every write (zero-effort backup)
+
+## License
+
+MIT
