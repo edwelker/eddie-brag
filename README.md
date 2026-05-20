@@ -12,17 +12,17 @@ Data auto-syncs to a private GitHub repo. Never lose your career history.
 
 ## Installation
 
+**Recommended: Install directly**
+```bash
+go install github.com/edwelker/eddie-brag/cmd/brag@latest
+```
+This installs `brag` to `$GOPATH/bin` (usually `~/go/bin`). Make sure it's in your PATH.
+
+**Or: Clone and install from source**
 ```bash
 git clone https://github.com/edwelker/eddie-brag.git
 cd eddie-brag
-go build -o brag ./cmd/brag/
-# Move to PATH
-mv brag ~/bin/  # or wherever you keep binaries
-```
-
-Or install directly:
-```bash
-go install github.com/edwelker/eddie-brag/cmd/brag@latest
+go install ./cmd/brag
 ```
 
 ## Quick Start
