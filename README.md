@@ -1,6 +1,6 @@
 # eddie-brag
 
-Staff-level professional accomplishment tracker for performance reviews.
+Staff-level professional accomplishment tracker for performance reviews and career progression.
 
 ## What This Is
 
@@ -8,7 +8,11 @@ A CLI tool for tracking work accomplishments with two workflows:
 - **Daily capture** (`brag add`) — frictionless, just bucket/description/evidence
 - **Weekly synthesis** (`brag enrich`) — add hours saved, business impact, strategic alignment
 
-Data auto-syncs to a private GitHub repo. Never lose your career history.
+**Key Features:**
+- Color-coded output for quick scanning (green = complete, yellow = needs work, red = critical gaps)
+- Smart completeness scoring (focuses on impact metrics, not fluff)
+- Auto-sync to private GitHub repo — never lose your career history
+- Built for staff+ engineers who need to demonstrate impact across delivery, architecture, process, and leadership
 
 ## Installation
 
@@ -84,7 +88,7 @@ Enrichment prompts:
 ## Viewing & Reporting
 
 ```bash
-# Last 7 days (default)
+# Last 7 days (default, color-coded output)
 brag list
 
 # Specific time periods
@@ -92,6 +96,9 @@ brag list --month 3
 brag list --week 12
 brag list --range 90d
 brag list --all
+
+# Disable colors (for scripts/piping)
+brag list --all --no-color
 
 # Generate review-ready report
 brag report --month 3  # Grouped by bucket with totals
@@ -101,6 +108,13 @@ brag report --year 1   # Full first year summary
 brag export --format csv --month 3
 brag export --format json --all
 ```
+
+**Understanding the output:**
+- **[100% ✓]** Green checkmark = review-ready (all key fields complete)
+- **[90% ✓]** Green = nearly complete, ready for review
+- **[75%]** Yellow = needs more enrichment
+- **[40% ⚠️]** Red warning = missing critical impact data
+- **[needs enrichment]** = hasn't been enriched yet
 
 ## Data Storage & Backup
 
@@ -144,24 +158,34 @@ brag help export    # Export formats
 ```
 cmd/brag/
   main.go       - CLI dispatcher
-  commands.go   - Command handlers
+  commands.go   - Command handlers (add, list, enrich, export, report)
   prompts.go    - Interactive survey logic
   help.go       - Help text
+  validation.go - Input validation
 
 internal/brag/
-  brag.go       - Domain logic, storage, validation
-  brag_test.go  - Unit tests
+  brag.go       - Core domain logic, storage, CRUD operations
+  query.go      - List/report formatting with color output
+  export.go     - JSON/CSV/TXT export
+  date.go       - Date math, tenure calculation, business day counting
+  filter.go     - Time-based filtering (week/month/range)
+  validation.go - URL validation, hours parsing
+  *_test.go     - 88% test coverage
 
 .github/workflows/
   test.yml      - CI (runs on macOS + Ubuntu)
 ```
 
-Key design decisions:
+**Key design decisions:**
 - `time.Local` everywhere (no UTC drift on week/month boundaries)
 - Self-healing `NextID` (protects against manual JSON edits)
 - `EnrichedAt` timestamp (prevents infinite re-prompt loop)
 - URL validation treats 401/403 as valid (internal tools are auth-protected)
 - Auto git commit+push on every write (zero-effort backup)
+- Completeness scoring emphasizes impact over fluff:
+  - Description (20%), Evidence (20%), Hours/Calculation (20%), Business Metric (20%), Strategic Alignment (20%)
+  - Peer recognition is bonus context, not scored (prevents gaming the metric)
+  - Zero hours + explanation = complete (some work prevents future waste)
 
 ## License
 
