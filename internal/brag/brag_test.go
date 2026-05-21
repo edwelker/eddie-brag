@@ -685,6 +685,135 @@ func containsHelper(s, substr string) bool {
 	return false
 }
 
+func TestEnrichEntry_NeverClearsValues(t *testing.T) {
+	// Test constants
+	const (
+		testStrategicAlign  = "Team velocity"
+		testPeerRecognition = "Got kudos"
+	)
+
+	// Setup
+	tempDir := t.TempDir()
+	originalGetBragPath := getBragPath
+	getBragPath = func() (string, error) {
+		return tempDir + "/brag.json", nil
+	}
+	defer func() { getBragPath = originalGetBragPath }()
+
+	// Initialize document with a fully enriched entry
+	roleStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.Local)
+	if err := InitBragDocument("Test Role", roleStart); err != nil {
+		t.Fatalf("InitBragDocument() error = %v", err)
+	}
+
+	// Add and enrich an entry
+	id, err := AddEntry("Delivery", "Test Entry", "http://example.com", "Completed", roleStart, roleStart)
+	if err != nil {
+		t.Fatalf("AddEntry() error = %v", err)
+	}
+
+	hours := 10.0
+	err = EnrichEntry(id, "http://example.com", &hours, "10 hours of work", "Saved time", testStrategicAlign, testPeerRecognition)
+	if err != nil {
+		t.Fatalf("EnrichEntry() error = %v", err)
+	}
+
+	// Read back the enriched entry
+	doc, err := readBragDocument()
+	if err != nil {
+		t.Fatalf("readBragDocument() error = %v", err)
+	}
+
+	var entry Entry
+	for _, e := range doc.Entries {
+		if e.ID == id {
+			entry = e
+			break
+		}
+	}
+
+	// Verify initial enrichment
+	if entry.HoursSaved == nil || *entry.HoursSaved != 10.0 {
+		t.Errorf("Initial HoursSaved = %v, want 10.0", entry.HoursSaved)
+	}
+	if entry.BusinessMetric != "Saved time" {
+		t.Errorf("Initial BusinessMetric = %q, want 'Saved time'", entry.BusinessMetric)
+	}
+	if entry.StrategicAlign != testStrategicAlign {
+		t.Errorf("Initial StrategicAlign = %q, want %q", entry.StrategicAlign, testStrategicAlign)
+	}
+	if entry.PeerRecognition != testPeerRecognition {
+		t.Errorf("Initial PeerRecognition = %q, want %q", entry.PeerRecognition, testPeerRecognition)
+	}
+
+	// Now call EnrichEntry with empty strings (simulating user pressing Enter to skip)
+	// This should NOT clear existing values
+	err = EnrichEntry(id, "", nil, "", "", "", "")
+	if err != nil {
+		t.Fatalf("EnrichEntry() with empty values error = %v", err)
+	}
+
+	// Read back the entry again
+	doc, err = readBragDocument()
+	if err != nil {
+		t.Fatalf("readBragDocument() error = %v", err)
+	}
+
+	for _, e := range doc.Entries {
+		if e.ID == id {
+			entry = e
+			break
+		}
+	}
+
+	// Verify that ALL values are preserved
+	if entry.HoursSaved == nil || *entry.HoursSaved != 10.0 {
+		t.Errorf("After empty enrich, HoursSaved = %v, want 10.0 (preserved)", entry.HoursSaved)
+	}
+	if entry.BusinessMetric != "Saved time" {
+		t.Errorf("After empty enrich, BusinessMetric = %q, want 'Saved time' (preserved)", entry.BusinessMetric)
+	}
+	if entry.StrategicAlign != testStrategicAlign {
+		t.Errorf("After empty enrich, StrategicAlign = %q, want %q (preserved)", entry.StrategicAlign, testStrategicAlign)
+	}
+	if entry.PeerRecognition != testPeerRecognition {
+		t.Errorf("After empty enrich, PeerRecognition = %q, want %q (preserved)", entry.PeerRecognition, testPeerRecognition)
+	}
+
+	// Now test partial update - only update business metric
+	err = EnrichEntry(id, "", nil, "", "New metric", "", "")
+	if err != nil {
+		t.Fatalf("EnrichEntry() partial update error = %v", err)
+	}
+
+	// Read back the entry
+	doc, err = readBragDocument()
+	if err != nil {
+		t.Fatalf("readBragDocument() error = %v", err)
+	}
+
+	for _, e := range doc.Entries {
+		if e.ID == id {
+			entry = e
+			break
+		}
+	}
+
+	// Verify that only business metric changed, others preserved
+	if entry.HoursSaved == nil || *entry.HoursSaved != 10.0 {
+		t.Errorf("After partial update, HoursSaved = %v, want 10.0 (preserved)", entry.HoursSaved)
+	}
+	if entry.BusinessMetric != "New metric" {
+		t.Errorf("After partial update, BusinessMetric = %q, want 'New metric' (updated)", entry.BusinessMetric)
+	}
+	if entry.StrategicAlign != testStrategicAlign {
+		t.Errorf("After partial update, StrategicAlign = %q, want %q (preserved)", entry.StrategicAlign, testStrategicAlign)
+	}
+	if entry.PeerRecognition != testPeerRecognition {
+		t.Errorf("After partial update, PeerRecognition = %q, want %q (preserved)", entry.PeerRecognition, testPeerRecognition)
+	}
+}
+
 func TestResolveDateFlags_ExplicitDates(t *testing.T) {
 	roleStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.Local)
 

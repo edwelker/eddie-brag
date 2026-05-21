@@ -319,8 +319,8 @@ func ClearEntries() error {
 }
 
 // EnrichEntry updates enrichment fields for an entry
-// Hours saved and calculation are only updated if explicitly provided (non-nil/non-empty)
-// Other fields (evidence, metrics, alignment, recognition) are always updated
+// All fields are only updated if explicitly provided (non-nil/non-empty)
+// This allows re-enrichment to preserve existing values when fields are skipped
 func EnrichEntry(id int, evidence string, hoursSaved *float64, hoursSavedCalc, businessMetric, strategicAlign, peerRecognition string) error {
 	doc, err := readBragDocument()
 	if err != nil {
@@ -341,10 +341,16 @@ func EnrichEntry(id int, evidence string, hoursSaved *float64, hoursSavedCalc, b
 			if hoursSavedCalc != "" {
 				doc.Entries[i].HoursSavedCalculation = hoursSavedCalc
 			}
-			// Always update other enrichment fields
-			doc.Entries[i].BusinessMetric = businessMetric
-			doc.Entries[i].StrategicAlign = strategicAlign
-			doc.Entries[i].PeerRecognition = peerRecognition
+			// Only update enrichment fields if provided (allows preserving existing values)
+			if businessMetric != "" {
+				doc.Entries[i].BusinessMetric = businessMetric
+			}
+			if strategicAlign != "" {
+				doc.Entries[i].StrategicAlign = strategicAlign
+			}
+			if peerRecognition != "" {
+				doc.Entries[i].PeerRecognition = peerRecognition
+			}
 			doc.Entries[i].EnrichedAt = &now
 			found = true
 			break

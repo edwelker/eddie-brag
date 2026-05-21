@@ -131,22 +131,28 @@ func ListEntries(rangeStr string, weekNum, monthNum int, all bool) error {
 			}
 
 			if NoColor {
-				fmt.Printf("#%d [%s] [%s to %s]%s%s\n", entry.ID,
-					entry.Status,
+				fmt.Printf("[%s to %s]\n",
 					entry.StartDate.Format("2006-01-02"),
-					entry.EndDate.Format("2006-01-02"),
-					completenessIndicator,
-					enrichMarker)
+					entry.EndDate.Format("2006-01-02"))
 			} else {
-				fmt.Printf("\033[1m#%d\033[0m \033[36m[%s]\033[0m [%s to %s]%s%s\n", entry.ID,
-					entry.Status,
+				fmt.Printf("[%s to %s]\n",
 					entry.StartDate.Format("2006-01-02"),
-					entry.EndDate.Format("2006-01-02"),
-					completenessIndicator,
-					enrichMarker)
+					entry.EndDate.Format("2006-01-02"))
 			}
 
-			fmt.Printf("  %s\n", entry.Description)
+			if NoColor {
+				fmt.Printf("  #%d [%s]%s%s %s\n", entry.ID,
+					entry.Status,
+					completenessIndicator,
+					enrichMarker,
+					entry.Description)
+			} else {
+				fmt.Printf("  \033[1m#%d\033[0m \033[36m[%s]\033[0m%s%s %s\n", entry.ID,
+					entry.Status,
+					completenessIndicator,
+					enrichMarker,
+					entry.Description)
+			}
 			if NoColor {
 				if entry.Evidence != "" {
 					fmt.Printf("  Evidence: %s\n", entry.Evidence)

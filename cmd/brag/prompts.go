@@ -383,3 +383,109 @@ func promptStatusUpdate(currentStatus string) string {
 
 	return promptStatus()
 }
+
+// displayExistingEnrichment shows what's already in the entry
+func displayExistingEnrichment(entry brag.Entry) {
+	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("Current Enrichment Data:")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+	if entry.HoursSaved != nil {
+		fmt.Printf("  Hours Saved: %.1f hours\n", *entry.HoursSaved)
+		if entry.HoursSavedCalculation != "" {
+			fmt.Printf("  Calculation: %s\n", entry.HoursSavedCalculation)
+		}
+	} else {
+		fmt.Println("  Hours Saved: [not set]")
+	}
+
+	if entry.BusinessMetric != "" {
+		fmt.Printf("  Business Metric: %s\n", entry.BusinessMetric)
+	} else {
+		fmt.Println("  Business Metric: [not set]")
+	}
+
+	if entry.StrategicAlign != "" {
+		fmt.Printf("  Strategic Alignment: %s\n", entry.StrategicAlign)
+	} else {
+		fmt.Println("  Strategic Alignment: [not set]")
+	}
+
+	if entry.PeerRecognition != "" {
+		fmt.Printf("  Peer Recognition: %s\n", entry.PeerRecognition)
+	} else {
+		fmt.Println("  Peer Recognition: [not set]")
+	}
+
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println()
+}
+
+// promptHoursSavedWithExisting prompts for hours saved, showing existing value
+func promptHoursSavedWithExisting(existing *float64, existingCalc string) (*float64, string) {
+	if existing != nil {
+		var updateHours bool
+		msg := fmt.Sprintf("Hours saved is currently %.1f hours. Update?", *existing)
+		if existingCalc != "" {
+			msg = fmt.Sprintf("Hours saved: %.1f hours (%s). Update?", *existing, existingCalc)
+		}
+
+		updatePrompt := &survey.Confirm{
+			Message: msg,
+			Default: false,
+		}
+		if err := survey.AskOne(updatePrompt, &updateHours); err != nil || !updateHours {
+			return nil, ""
+		}
+	}
+
+	return promptHoursSaved()
+}
+
+// promptBusinessMetricWithExisting prompts for business metric, showing existing value
+func promptBusinessMetricWithExisting(bucket, existing string) string {
+	if existing != "" {
+		var updateMetric bool
+		updatePrompt := &survey.Confirm{
+			Message: fmt.Sprintf("Business metric: '%s'. Update?", existing),
+			Default: false,
+		}
+		if err := survey.AskOne(updatePrompt, &updateMetric); err != nil || !updateMetric {
+			return ""
+		}
+	}
+
+	return promptBusinessMetric(bucket)
+}
+
+// promptStrategicAlignWithExisting prompts for strategic alignment, showing existing value
+func promptStrategicAlignWithExisting(existing string) string {
+	if existing != "" {
+		var updateAlign bool
+		updatePrompt := &survey.Confirm{
+			Message: fmt.Sprintf("Strategic alignment: '%s'. Update?", existing),
+			Default: false,
+		}
+		if err := survey.AskOne(updatePrompt, &updateAlign); err != nil || !updateAlign {
+			return ""
+		}
+	}
+
+	return promptStrategicAlign()
+}
+
+// promptPeerRecognitionWithExisting prompts for peer recognition, showing existing value
+func promptPeerRecognitionWithExisting(existing string) string {
+	if existing != "" {
+		var updateRecog bool
+		updatePrompt := &survey.Confirm{
+			Message: fmt.Sprintf("Peer recognition: '%s'. Update?", existing),
+			Default: false,
+		}
+		if err := survey.AskOne(updatePrompt, &updateRecog); err != nil || !updateRecog {
+			return ""
+		}
+	}
+
+	return promptPeerRecognition()
+}

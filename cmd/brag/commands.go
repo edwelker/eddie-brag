@@ -342,7 +342,8 @@ func handleEnrich() {
 			strategicAlign = *align
 			peerRecognition = *recognition
 		} else {
-			// Interactive prompts
+			// Interactive prompts - show existing enrichment data first
+			displayExistingEnrichment(entry)
 
 			// Prompt for status update
 			newStatus := promptStatusUpdate(entry.Status)
@@ -354,27 +355,38 @@ func handleEnrich() {
 				}
 			}
 
-			hoursSaved, hoursSavedCalc = promptHoursSaved()
+			// Use context-aware prompts that show existing values
+			hoursSaved, hoursSavedCalc = promptHoursSavedWithExisting(entry.HoursSaved, entry.HoursSavedCalculation)
 
 			// Bucket-specific prompting for critical fields
 			if entry.Bucket == bucketProcess {
-				businessMetric = promptRequiredBusinessMetric(entry.Bucket)
+				// For Process bucket, business metric is required
+				businessMetric = promptBusinessMetricWithExisting(entry.Bucket, entry.BusinessMetric)
+				if businessMetric == "" && entry.BusinessMetric == "" {
+					businessMetric = promptRequiredBusinessMetric(entry.Bucket)
+				}
 			} else {
-				businessMetric = promptBusinessMetric(entry.Bucket)
+				businessMetric = promptBusinessMetricWithExisting(entry.Bucket, entry.BusinessMetric)
 			}
 
-			strategicAlign = promptStrategicAlign()
+			strategicAlign = promptStrategicAlignWithExisting(entry.StrategicAlign)
 
 			if entry.Bucket == bucketLeadership {
-				peerRecognition = promptRequiredPeerRecognition()
+				// For Leadership bucket, peer recognition is required
+				peerRecognition = promptPeerRecognitionWithExisting(entry.PeerRecognition)
+				if peerRecognition == "" && entry.PeerRecognition == "" {
+					peerRecognition = promptRequiredPeerRecognition()
+				}
 			} else {
-				peerRecognition = promptPeerRecognition()
+				peerRecognition = promptPeerRecognitionWithExisting(entry.PeerRecognition)
 			}
 
-			// Validate before saving
-			if !validateEnrichment(entry.Bucket, businessMetric, peerRecognition) {
-				fmt.Println("Enrichment cancelled.")
-				continue
+			// Validate before saving - only validate new values if they're being set
+			if businessMetric != "" || peerRecognition != "" {
+				if !validateEnrichment(entry.Bucket, businessMetric, peerRecognition) {
+					fmt.Println("Enrichment cancelled.")
+					continue
+				}
 			}
 		}
 
