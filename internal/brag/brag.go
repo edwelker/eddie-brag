@@ -38,6 +38,8 @@ type BragDocument struct {
 }
 
 // CalculateCompleteness returns a percentage score (0-100) based on filled enrichment fields
+// Scoring: Description (20), Evidence (20), Hours/Calculation (20), Business Metric (20), Strategic Alignment (20)
+// Peer Recognition is excluded from scoring as it's optional/bonus context
 func (e *Entry) CalculateCompleteness() int {
 	score := 0
 
@@ -49,18 +51,16 @@ func (e *Entry) CalculateCompleteness() int {
 		score += 20
 	}
 
-	// Enrichment fields (15 points each)
-	if e.HoursSaved != nil {
-		score += 15
+	// Enrichment fields (20 points each)
+	// Hours saved OR calculation explanation counts
+	if e.HoursSaved != nil || e.HoursSavedCalculation != "" {
+		score += 20
 	}
 	if e.BusinessMetric != "" {
-		score += 15
+		score += 20
 	}
 	if e.StrategicAlign != "" {
-		score += 15
-	}
-	if e.PeerRecognition != "" {
-		score += 15
+		score += 20
 	}
 
 	return score

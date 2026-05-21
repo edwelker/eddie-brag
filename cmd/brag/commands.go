@@ -393,11 +393,14 @@ func handleList() {
 	week := fs.Int("week", -1, "Week number (-1 = no filter, 0 = current week)")
 	month := fs.Int("month", -1, "Month number (-1 = no filter, 0 = current month)")
 	all := fs.Bool("all", false, "Show all entries")
+	noColor := fs.Bool("no-color", false, "Disable color output")
 
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		fmt.Printf("Error parsing flags: %v\n", err)
 		os.Exit(1)
 	}
+
+	brag.NoColor = *noColor
 
 	// Handle 0 as "current period"
 	if *week == 0 || *month == 0 {

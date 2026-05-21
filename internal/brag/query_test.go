@@ -10,6 +10,11 @@ import (
 
 // Helper to capture stdout
 func captureOutput(fn func() error) (string, error) {
+	// Disable color for tests
+	oldNoColor := NoColor
+	NoColor = true
+	defer func() { NoColor = oldNoColor }()
+
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	if err != nil {

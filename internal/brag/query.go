@@ -2,8 +2,12 @@ package brag
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
+
+// NoColor disables color output when true
+var NoColor = false
 
 // ListEntries lists entries with optional time filtering
 func ListEntries(rangeStr string, weekNum, monthNum int, all bool) error {
@@ -49,12 +53,20 @@ func ListEntries(rangeStr string, weekNum, monthNum int, all bool) error {
 	}
 	totalBusinessDays := totalHours / 8.0
 
-	// Show role and tenure
+	// Show role and tenure with color
 	tenure := getTenure(doc.RoleStartDate)
-	fmt.Printf("Role: %s\n", doc.RoleTitle)
-	fmt.Printf("Tenure: %s\n", tenure)
-	if totalHours > 0 {
-		fmt.Printf("Total Hours Saved: %.1f (%.2f business days)\n", totalHours, totalBusinessDays)
+	if NoColor {
+		fmt.Printf("Role: %s\n", doc.RoleTitle)
+		fmt.Printf("Tenure: %s\n", tenure)
+		if totalHours > 0 {
+			fmt.Printf("Total Hours Saved: %.1f (%.2f business days)\n", totalHours, totalBusinessDays)
+		}
+	} else {
+		fmt.Printf("\033[1;36mRole:\033[0m %s\n", doc.RoleTitle)
+		fmt.Printf("\033[1;36mTenure:\033[0m %s\n", tenure)
+		if totalHours > 0 {
+			fmt.Printf("\033[1;36mTotal Hours Saved:\033[0m %.1f (%.2f business days)\n", totalHours, totalBusinessDays)
+		}
 	}
 	fmt.Println()
 
@@ -68,54 +80,119 @@ func ListEntries(rangeStr string, weekNum, monthNum int, all bool) error {
 			continue
 		}
 
-		fmt.Printf("## %s\n", bucket)
+		if NoColor {
+			fmt.Printf("## %s\n", bucket)
+		} else {
+			fmt.Printf("\033[1;35m## %s\033[0m\n", bucket)
+		}
+
 		for _, entry := range entries {
+			// Skip test/draft entries
+			if strings.Contains(strings.ToLower(entry.Status), "test") || strings.Contains(strings.ToLower(entry.Status), "draft") {
+				continue
+			}
+
 			completeness := entry.CalculateCompleteness()
 			enrichMarker := ""
 			if entry.Evidence == "" || entry.EnrichedAt == nil {
-				enrichMarker = " [needs enrichment]"
-			}
-
-			// Show completeness score
-			completenessIndicator := ""
-			if completeness < 100 {
-				if completeness < 60 {
-					completenessIndicator = fmt.Sprintf(" [%d%% ⚠️]", completeness)
+				if NoColor {
+					enrichMarker = " [needs enrichment]"
 				} else {
-					completenessIndicator = fmt.Sprintf(" [%d%%]", completeness)
+					enrichMarker = " \033[33m[needs enrichment]\033[0m"
 				}
-			} else {
-				completenessIndicator = " [100% ✓]"
 			}
 
-			fmt.Printf("#%d [%s] [%s to %s]%s%s\n", entry.ID,
-				entry.Status,
-				entry.StartDate.Format("2006-01-02"),
-				entry.EndDate.Format("2006-01-02"),
-				completenessIndicator,
-				enrichMarker)
+			// Show completeness score with color
+			completenessIndicator := ""
+			if NoColor {
+				if completeness < 100 {
+					if completeness < 60 {
+						completenessIndicator = fmt.Sprintf(" [%d%% ⚠️]", completeness)
+					} else if completeness < 90 {
+						completenessIndicator = fmt.Sprintf(" [%d%%]", completeness)
+					} else {
+						completenessIndicator = fmt.Sprintf(" [%d%% ✓]", completeness)
+					}
+				} else {
+					completenessIndicator = " [100% ✓]"
+				}
+			} else {
+				if completeness < 100 {
+					if completeness < 60 {
+						completenessIndicator = fmt.Sprintf(" \033[31m[%d%% ⚠️]\033[0m", completeness)
+					} else if completeness < 90 {
+						completenessIndicator = fmt.Sprintf(" \033[33m[%d%%]\033[0m", completeness)
+					} else {
+						completenessIndicator = fmt.Sprintf(" \033[32m[%d%% ✓]\033[0m", completeness)
+					}
+				} else {
+					completenessIndicator = " \033[32m[100% ✓]\033[0m"
+				}
+			}
+
+			if NoColor {
+				fmt.Printf("#%d [%s] [%s to %s]%s%s\n", entry.ID,
+					entry.Status,
+					entry.StartDate.Format("2006-01-02"),
+					entry.EndDate.Format("2006-01-02"),
+					completenessIndicator,
+					enrichMarker)
+			} else {
+				fmt.Printf("\033[1m#%d\033[0m \033[36m[%s]\033[0m [%s to %s]%s%s\n", entry.ID,
+					entry.Status,
+					entry.StartDate.Format("2006-01-02"),
+					entry.EndDate.Format("2006-01-02"),
+					completenessIndicator,
+					enrichMarker)
+			}
+
 			fmt.Printf("  %s\n", entry.Description)
-			if entry.Evidence != "" {
-				fmt.Printf("  Evidence: %s\n", entry.Evidence)
-			} else {
-				fmt.Printf("  Evidence: [missing]\n")
-			}
-
-			if entry.HoursSaved != nil {
-				businessDays := *entry.HoursSaved / 8.0
-				fmt.Printf("  Hours Saved: %.1f (%.2f business days)\n", *entry.HoursSaved, businessDays)
-				if entry.HoursSavedCalculation != "" {
-					fmt.Printf("    Calculation: %s\n", entry.HoursSavedCalculation)
+			if NoColor {
+				if entry.Evidence != "" {
+					fmt.Printf("  Evidence: %s\n", entry.Evidence)
+				} else {
+					fmt.Printf("  Evidence: [missing]\n")
 				}
-			}
-			if entry.BusinessMetric != "" {
-				fmt.Printf("  Business Metric: %s\n", entry.BusinessMetric)
-			}
-			if entry.StrategicAlign != "" {
-				fmt.Printf("  Strategic Alignment: %s\n", entry.StrategicAlign)
-			}
-			if entry.PeerRecognition != "" {
-				fmt.Printf("  Peer Recognition: %s\n", entry.PeerRecognition)
+
+				if entry.HoursSaved != nil {
+					businessDays := *entry.HoursSaved / 8.0
+					fmt.Printf("  Hours Saved: %.1f (%.2f business days)\n", *entry.HoursSaved, businessDays)
+					if entry.HoursSavedCalculation != "" {
+						fmt.Printf("    Calculation: %s\n", entry.HoursSavedCalculation)
+					}
+				}
+				if entry.BusinessMetric != "" {
+					fmt.Printf("  Business Metric: %s\n", entry.BusinessMetric)
+				}
+				if entry.StrategicAlign != "" {
+					fmt.Printf("  Strategic Alignment: %s\n", entry.StrategicAlign)
+				}
+				if entry.PeerRecognition != "" {
+					fmt.Printf("  Peer Recognition: %s\n", entry.PeerRecognition)
+				}
+			} else {
+				if entry.Evidence != "" {
+					fmt.Printf("  \033[90mEvidence:\033[0m %s\n", entry.Evidence)
+				} else {
+					fmt.Printf("  \033[90mEvidence:\033[0m \033[31m[missing]\033[0m\n")
+				}
+
+				if entry.HoursSaved != nil {
+					businessDays := *entry.HoursSaved / 8.0
+					fmt.Printf("  \033[90mHours Saved:\033[0m %.1f (%.2f business days)\n", *entry.HoursSaved, businessDays)
+					if entry.HoursSavedCalculation != "" {
+						fmt.Printf("    \033[90mCalculation:\033[0m %s\n", entry.HoursSavedCalculation)
+					}
+				}
+				if entry.BusinessMetric != "" {
+					fmt.Printf("  \033[90mBusiness Metric:\033[0m %s\n", entry.BusinessMetric)
+				}
+				if entry.StrategicAlign != "" {
+					fmt.Printf("  \033[90mStrategic Alignment:\033[0m %s\n", entry.StrategicAlign)
+				}
+				if entry.PeerRecognition != "" {
+					fmt.Printf("  \033[90mPeer Recognition:\033[0m %s\n", entry.PeerRecognition)
+				}
 			}
 			fmt.Println()
 		}

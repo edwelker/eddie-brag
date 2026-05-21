@@ -407,7 +407,20 @@ func TestCalculateCompleteness_AllScores(t *testing.T) {
 				StrategicAlign:  "",
 				PeerRecognition: "",
 			},
-			wantScore: 55,
+			wantScore: 60, // 20 + 20 + 20
+		},
+		{
+			name: "with_hours_calculation_only",
+			entry: Entry{
+				Description:           "Some description",
+				Evidence:              "http://example.com",
+				HoursSaved:            nil,
+				HoursSavedCalculation: "Prevented tech debt",
+				BusinessMetric:        "",
+				StrategicAlign:        "",
+				PeerRecognition:       "",
+			},
+			wantScore: 60, // 20 + 20 + 20
 		},
 		{
 			name: "with_business_metric",
@@ -419,7 +432,7 @@ func TestCalculateCompleteness_AllScores(t *testing.T) {
 				StrategicAlign:  "",
 				PeerRecognition: "",
 			},
-			wantScore: 55,
+			wantScore: 60, // 20 + 20 + 20
 		},
 		{
 			name: "with_strategic_align",
@@ -431,10 +444,10 @@ func TestCalculateCompleteness_AllScores(t *testing.T) {
 				StrategicAlign:  "Aligns with roadmap",
 				PeerRecognition: "",
 			},
-			wantScore: 55,
+			wantScore: 60, // 20 + 20 + 20
 		},
 		{
-			name: "with_peer_recognition",
+			name: "with_peer_recognition_only",
 			entry: Entry{
 				Description:     "Some description",
 				Evidence:        "http://example.com",
@@ -443,7 +456,7 @@ func TestCalculateCompleteness_AllScores(t *testing.T) {
 				StrategicAlign:  "",
 				PeerRecognition: "Great work!",
 			},
-			wantScore: 55,
+			wantScore: 40, // Peer recognition doesn't count in score
 		},
 		{
 			name: "fully_enriched",
@@ -467,7 +480,7 @@ func TestCalculateCompleteness_AllScores(t *testing.T) {
 				StrategicAlign:  "Strategic",
 				PeerRecognition: "Good job",
 			},
-			wantScore: 85, // 40 (desc+evidence) + 15 (hours) + 15 (strategic) + 15 (peer)
+			wantScore: 80, // 20 + 20 + 20 + 20 (peer recognition doesn't count)
 		},
 	}
 

@@ -540,7 +540,16 @@ func TestEntry_CalculateCompleteness(t *testing.T) {
 				Evidence:    "http://example.com",
 				HoursSaved:  ptrFloat64(10.0),
 			},
-			want: 55,
+			want: 60, // 20 + 20 + 20
+		},
+		{
+			name: "Base + hours calculation only (no numeric hours)",
+			entry: Entry{
+				Description:           "Did something",
+				Evidence:              "http://example.com",
+				HoursSavedCalculation: "Prevented future debt",
+			},
+			want: 60, // 20 + 20 + 20
 		},
 		{
 			name: "Base + business metric",
@@ -549,7 +558,7 @@ func TestEntry_CalculateCompleteness(t *testing.T) {
 				Evidence:       "http://example.com",
 				BusinessMetric: "Saved 10 hours",
 			},
-			want: 55,
+			want: 60, // 20 + 20 + 20
 		},
 		{
 			name: "Base + strategic align",
@@ -558,16 +567,16 @@ func TestEntry_CalculateCompleteness(t *testing.T) {
 				Evidence:       "http://example.com",
 				StrategicAlign: "Developer velocity",
 			},
-			want: 55,
+			want: 60, // 20 + 20 + 20
 		},
 		{
-			name: "Base + peer recognition",
+			name: "Base + peer recognition (not counted in score)",
 			entry: Entry{
 				Description:     "Did something",
 				Evidence:        "http://example.com",
 				PeerRecognition: "Team praised it",
 			},
-			want: 55,
+			want: 40, // Only base fields count, peer recognition is bonus
 		},
 		{
 			name: "All fields complete",
@@ -579,7 +588,7 @@ func TestEntry_CalculateCompleteness(t *testing.T) {
 				StrategicAlign:  "Developer velocity",
 				PeerRecognition: "Team praised it",
 			},
-			want: 100,
+			want: 100, // 20 + 20 + 20 + 20 + 20
 		},
 		{
 			name: "Missing evidence marked as [missing]",
@@ -597,7 +606,19 @@ func TestEntry_CalculateCompleteness(t *testing.T) {
 				StrategicAlign:  "Developer velocity",
 				PeerRecognition: "Team praised it",
 			},
-			want: 60, // 15 * 4 enrichment fields
+			want: 60, // 20 + 20 + 20 (peer recognition doesn't count)
+		},
+		{
+			name: "Zero hours with calculation",
+			entry: Entry{
+				Description:           "Did something",
+				Evidence:              "http://example.com",
+				HoursSaved:            ptrFloat64(0.0),
+				HoursSavedCalculation: "Prevented tech debt",
+				BusinessMetric:        "Improved maintainability",
+				StrategicAlign:        "Code quality",
+			},
+			want: 100, // Full score with zero hours but explanation
 		},
 	}
 
