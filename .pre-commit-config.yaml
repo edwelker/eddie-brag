@@ -1,0 +1,70 @@
+repos:
+  - repo: local
+    hooks:
+      - id: go-test-coverage
+        name: Go test coverage
+        entry: bash
+        args:
+          - -c
+          - |
+            go test ./internal/... -coverprofile=coverage.out -covermode=atomic
+            coverage=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+            echo "Coverage: ${coverage}%"
+            threshold=80
+            if (( $(echo "$coverage < $threshold" | bc -l) )); then
+              echo "Coverage ${coverage}% below ${threshold}%"
+              exit 1
+            fi
+        language: system
+        pass_filenames: false
+        files: '\.go$'
+
+      - id: go-build
+        name: Go build
+        entry: go build -o /dev/null ./cmd/brag/
+        language: system
+        pass_filenames: false
+        files: '\.go$'
+
+      - id: go-fmt
+        name: Go format
+        entry: gofmt -l -w
+        language: system
+        files: '\.go$'
+
+      - id: goimports
+        name: Go imports
+        entry: bash
+        args:
+          - -c
+          - |
+            export PATH="$HOME/go/bin:$PATH"
+            if ! command -v goimports &> /dev/null; then
+              go install golang.org/x/tools/cmd/goimports@latest
+            fi
+            goimports -l -w .
+        language: system
+        pass_filenames: false
+        files: '\.go$'
+
+      - id: go-vet
+        name: Go vet
+        entry: go vet ./...
+        language: system
+        pass_filenames: false
+        files: '\.go$'
+
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash
+        args:
+          - -c
+          - |
+            export PATH="$HOME/go/bin:$PATH"
+            if ! command -v golangci-lint &> /dev/null; then
+              go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+            fi
+            golangci-lint run
+        language: system
+        pass_filenames: false
+        files: '\.go$'

@@ -21,8 +21,39 @@ jobs:
       with:
         go-version: '1.21'
 
-    - name: Run tests
-      run: go test -v ./...
+    - name: Install tools
+      run: |
+        go install golang.org/x/tools/cmd/goimports@latest
+        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+    - name: Format check
+      run: |
+        gofmt -l .
+        test -z "$(gofmt -l .)"
+
+    - name: Import check
+      run: |
+        goimports -l .
+        test -z "$(goimports -l .)"
+
+    - name: Go vet
+      run: go vet ./...
+
+    - name: golangci-lint
+      run: golangci-lint run
+
+    - name: Run tests with coverage
+      run: go test -v ./... -coverprofile=coverage.out -covermode=atomic
+
+    - name: Check coverage threshold
+      run: |
+        coverage=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+        echo "Total coverage: ${coverage}%"
+        threshold=80
+        if (( $(echo "$coverage < $threshold" | bc -l) )); then
+          echo "Coverage ${coverage}% is below threshold ${threshold}%"
+          exit 1
+        fi
 
     - name: Build
       run: go build -v ./cmd/brag/

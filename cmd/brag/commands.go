@@ -13,12 +13,26 @@ import (
 	"github.com/edwelker/eddie-brag/internal/brag"
 )
 
+const (
+	bucketProcess    = "Process"
+	bucketLeadership = "Leadership"
+)
+
 func handleInit() {
+	var roleTitle string
+	titlePrompt := &survey.Input{
+		Message: "Role title:",
+	}
+	if err := survey.AskOne(titlePrompt, &roleTitle, survey.WithValidator(survey.Required)); err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
 	var roleStartDateStr string
-	prompt := &survey.Input{
+	datePrompt := &survey.Input{
 		Message: "Role start date (YYYY-MM-DD):",
 	}
-	if err := survey.AskOne(prompt, &roleStartDateStr, survey.WithValidator(survey.Required)); err != nil {
+	if err := survey.AskOne(datePrompt, &roleStartDateStr, survey.WithValidator(survey.Required)); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -29,7 +43,7 @@ func handleInit() {
 		os.Exit(1)
 	}
 
-	if err := brag.InitBragDocument(roleStartDate); err != nil {
+	if err := brag.InitBragDocument(roleTitle, roleStartDate); err != nil {
 		fmt.Printf("Error initializing: %v\n", err)
 		os.Exit(1)
 	}
@@ -40,12 +54,16 @@ func handleAdd() {
 	bucket := fs.String("b", "", "Work context bucket")
 	description := fs.String("d", "", "Description")
 	evidence := fs.String("e", "", "Evidence URL")
+	status := fs.String("status", "", "Status (Completed, In Progress, Proposed, Abandoned)")
 	startDateStr := fs.String("start", "", "Start date (YYYY-MM-DD)")
 	endDateStr := fs.String("end", "", "End date (YYYY-MM-DD)")
 	weekNum := fs.Int("week", 0, "Week number (relative to role start)")
 	monthNum := fs.Int("month", 0, "Month number (relative to role start)")
 
-	fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		fmt.Printf("Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
 
 	var err error
 	var startDate, endDate time.Time
@@ -57,13 +75,61 @@ func handleAdd() {
 		os.Exit(1)
 	}
 
-	startDate, endDate, err = brag.ResolveDateFlags(doc.RoleStartDate, *weekNum, *monthNum, *startDateStr, *endDateStr)
-	if err != nil {
-		fmt.Printf("Error resolving dates: %v\n", err)
-		os.Exit(1)
+	// Check if any flags provided for non-interactive mode
+	hasDateFlags := *weekNum > 0 || *monthNum > 0 || *startDateStr != "" || *endDateStr != ""
+	hasContentFlags := *bucket != "" || *description != ""
+	interactiveMode := !hasDateFlags && !hasContentFlags
+
+	if hasDateFlags {
+		// Use flags for dates
+		startDate, endDate, err = brag.ResolveDateFlags(doc.RoleStartDate, *weekNum, *monthNum, *startDateStr, *endDateStr)
+		if err != nil {
+			fmt.Printf("Error resolving dates: %v\n", err)
+			os.Exit(1)
+		}
+	} else if interactiveMode {
+		// Interactive date prompt
+		dateChoice := promptDateOption()
+		switch dateChoice {
+		case "Today":
+			startDate, endDate, err = brag.ResolveDateFlags(doc.RoleStartDate, 0, 0, "", "")
+			if err != nil {
+				fmt.Printf("Error resolving today's date: %v\n", err)
+				os.Exit(1)
+			}
+		case "Specific date":
+			*startDateStr = promptSpecificDate("Start date")
+			*endDateStr = promptSpecificDate("End date")
+			startDate, endDate, err = brag.ResolveDateFlags(doc.RoleStartDate, 0, 0, *startDateStr, *endDateStr)
+			if err != nil {
+				fmt.Printf("Error parsing dates: %v\n", err)
+				os.Exit(1)
+			}
+		case "Week number":
+			*weekNum = promptWeekNumber()
+			startDate, endDate, err = brag.ResolveDateFlags(doc.RoleStartDate, *weekNum, 0, "", "")
+			if err != nil {
+				fmt.Printf("Error resolving week dates: %v\n", err)
+				os.Exit(1)
+			}
+		case "Month number":
+			*monthNum = promptMonthNumber()
+			startDate, endDate, err = brag.ResolveDateFlags(doc.RoleStartDate, 0, *monthNum, "", "")
+			if err != nil {
+				fmt.Printf("Error resolving month dates: %v\n", err)
+				os.Exit(1)
+			}
+		}
+	} else {
+		// Flags provided but no dates - default to today
+		startDate, endDate, err = brag.ResolveDateFlags(doc.RoleStartDate, *weekNum, *monthNum, *startDateStr, *endDateStr)
+		if err != nil {
+			fmt.Printf("Error resolving dates: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
-	// Interactive prompts if flags not provided
+	// Interactive prompts for content if flags not provided
 	if *bucket == "" {
 		*bucket = promptBucket()
 	}
@@ -72,16 +138,111 @@ func handleAdd() {
 		*description = promptDescription()
 	}
 
-	if *evidence == "" {
-		*evidence = promptEvidenceWithValidation()
+	// Evidence validation - warn if missing
+	if *evidence == "" && interactiveMode {
+		*evidence = promptEvidenceWithOptions()
 	}
 
-	if err := brag.AddEntry(*bucket, *description, *evidence, startDate, endDate); err != nil {
+	// Status prompt in interactive mode
+	if *status == "" && interactiveMode {
+		*status = promptStatus()
+	}
+
+	newID, err := brag.AddEntry(*bucket, *description, *evidence, *status, startDate, endDate)
+	if err != nil {
 		fmt.Printf("Error adding entry: %v\n", err)
 		os.Exit(1)
 	}
 
 	fmt.Println("Entry added successfully!")
+
+	// Ask if user wants to enrich now
+	if interactiveMode && promptEnrichNow() {
+		hoursSaved, hoursSavedCalc := promptHoursSaved()
+
+		// Bucket-specific prompting for critical fields
+		var businessMetric string
+		if *bucket == bucketProcess {
+			businessMetric = promptRequiredBusinessMetric(*bucket)
+		} else {
+			businessMetric = promptBusinessMetric(*bucket)
+		}
+
+		strategicAlign := promptStrategicAlign()
+
+		var peerRecognition string
+		if *bucket == bucketLeadership {
+			peerRecognition = promptRequiredPeerRecognition()
+		} else {
+			peerRecognition = promptPeerRecognition()
+		}
+
+		// Validate before saving
+		if !validateEnrichment(*bucket, businessMetric, peerRecognition) {
+			fmt.Println("Enrichment cancelled.")
+			return
+		}
+
+		if err := brag.EnrichEntry(newID, *evidence, hoursSaved, hoursSavedCalc, businessMetric, strategicAlign, peerRecognition); err != nil {
+			fmt.Printf("Error enriching entry: %v\n", err)
+			return
+		}
+
+		fmt.Println("Entry enriched successfully!")
+	}
+}
+
+func handleUpdate() {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: brag update <id> [options]")
+		fmt.Println("Options: -b bucket, -d description, -e evidence, --start date, --end date")
+		os.Exit(1)
+	}
+
+	id, err := strconv.Atoi(os.Args[2])
+	if err != nil {
+		fmt.Printf("Invalid ID: %s\n", os.Args[2])
+		os.Exit(1)
+	}
+
+	fs := flag.NewFlagSet("update", flag.ExitOnError)
+	bucket := fs.String("b", "", "Work context bucket")
+	description := fs.String("d", "", "Description")
+	evidence := fs.String("e", "", "Evidence URL")
+	status := fs.String("status", "", "Status (Completed, In Progress, Proposed, Abandoned)")
+	startDateStr := fs.String("start", "", "Start date (YYYY-MM-DD)")
+	endDateStr := fs.String("end", "", "End date (YYYY-MM-DD)")
+	weekNum := fs.Int("week", 0, "Week number (relative to role start)")
+	monthNum := fs.Int("month", 0, "Month number (relative to role start)")
+
+	if err := fs.Parse(os.Args[3:]); err != nil {
+		fmt.Printf("Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+
+	var startDate, endDate time.Time
+
+	// Resolve dates if provided
+	if *weekNum > 0 || *monthNum > 0 || *startDateStr != "" || *endDateStr != "" {
+		doc, err := readDocForDates()
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		startDate, endDate, err = brag.ResolveDateFlags(doc.RoleStartDate, *weekNum, *monthNum, *startDateStr, *endDateStr)
+		if err != nil {
+			fmt.Printf("Error resolving dates: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if err := brag.UpdateEntry(id, *bucket, *description, *evidence, *status, startDate, endDate); err != nil {
+		fmt.Printf("Error updating entry: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Entry updated successfully!")
 }
 
 func handleEnrich() {
@@ -89,8 +250,17 @@ func handleEnrich() {
 	rangeStr := fs.String("range", "", "Time range (e.g., 30d)")
 	id := fs.Int("id", 0, "Specific entry ID")
 	pending := fs.Bool("pending", false, "List pending entries without prompting")
+	hoursStr := fs.String("hours", "", "Hours saved (e.g., 29.625)")
+	calc := fs.String("calc", "", "Calculation notes")
+	metric := fs.String("metric", "", "Business metric")
+	align := fs.String("align", "", "Strategic alignment")
+	recognition := fs.String("recognition", "", "Peer recognition")
+	skipPrompt := fs.Bool("yes", false, "Skip confirmation prompt")
 
-	fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		fmt.Printf("Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
 
 	entries, err := brag.GetUnenrichedEntries(*rangeStr, *id)
 	if err != nil {
@@ -116,6 +286,9 @@ func handleEnrich() {
 		return
 	}
 
+	// Check if flags provide all data for non-interactive mode
+	hasFlags := *hoursStr != "" || *calc != "" || *metric != "" || *align != "" || *recognition != ""
+
 	// Interactive enrichment
 	for _, entry := range entries {
 		fmt.Printf("\n#%d [%s to %s] %s\n",
@@ -125,26 +298,87 @@ func handleEnrich() {
 			entry.Bucket)
 		fmt.Printf("%s\n", entry.Description)
 
-		var proceed bool
-		confirmPrompt := &survey.Confirm{
-			Message: "Enrich this entry?",
-			Default: false,
-		}
-		if err := survey.AskOne(confirmPrompt, &proceed); err != nil {
-			continue
-		}
-
+		// Skip confirmation if --yes flag or if using flags for data
+		proceed := *skipPrompt || hasFlags
 		if !proceed {
-			continue
+			confirmPrompt := &survey.Confirm{
+				Message: "Enrich this entry?",
+				Default: false,
+			}
+			if err := survey.AskOne(confirmPrompt, &proceed); err != nil {
+				continue
+			}
+
+			if !proceed {
+				continue
+			}
 		}
 
-		// Collect enrichment data
-		hoursSaved := promptHoursSaved()
-		businessMetric := promptBusinessMetric()
-		strategicAlign := promptStrategicAlign()
-		peerRecognition := promptPeerRecognition()
+		// Prompt for evidence if missing and not provided via flag
+		evidence := entry.Evidence
+		if evidence == "" {
+			evidence = promptEvidenceWithValidation()
+		}
 
-		if err := brag.EnrichEntry(entry.ID, hoursSaved, businessMetric, strategicAlign, peerRecognition); err != nil {
+		// Collect enrichment data from flags or prompts
+		var hoursSaved *float64
+		var hoursSavedCalc string
+		var businessMetric string
+		var strategicAlign string
+		var peerRecognition string
+
+		if hasFlags {
+			// Use flag values
+			if *hoursStr != "" {
+				hours, err := brag.ParseHoursInput(*hoursStr)
+				if err != nil {
+					fmt.Printf("Error parsing hours: %v\n", err)
+					continue
+				}
+				hoursSaved = &hours
+			}
+			hoursSavedCalc = *calc
+			businessMetric = *metric
+			strategicAlign = *align
+			peerRecognition = *recognition
+		} else {
+			// Interactive prompts
+
+			// Prompt for status update
+			newStatus := promptStatusUpdate(entry.Status)
+			if newStatus != "" {
+				if err := brag.UpdateEntry(entry.ID, "", "", "", newStatus, time.Time{}, time.Time{}); err != nil {
+					fmt.Printf("Error updating status: %v\n", err)
+				} else {
+					fmt.Printf("Status updated to '%s'\n", newStatus)
+				}
+			}
+
+			hoursSaved, hoursSavedCalc = promptHoursSaved()
+
+			// Bucket-specific prompting for critical fields
+			if entry.Bucket == bucketProcess {
+				businessMetric = promptRequiredBusinessMetric(entry.Bucket)
+			} else {
+				businessMetric = promptBusinessMetric(entry.Bucket)
+			}
+
+			strategicAlign = promptStrategicAlign()
+
+			if entry.Bucket == bucketLeadership {
+				peerRecognition = promptRequiredPeerRecognition()
+			} else {
+				peerRecognition = promptPeerRecognition()
+			}
+
+			// Validate before saving
+			if !validateEnrichment(entry.Bucket, businessMetric, peerRecognition) {
+				fmt.Println("Enrichment cancelled.")
+				continue
+			}
+		}
+
+		if err := brag.EnrichEntry(entry.ID, evidence, hoursSaved, hoursSavedCalc, businessMetric, strategicAlign, peerRecognition); err != nil {
 			fmt.Printf("Error enriching entry: %v\n", err)
 			continue
 		}
@@ -156,11 +390,37 @@ func handleEnrich() {
 func handleList() {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	rangeStr := fs.String("range", "", "Time range (e.g., 30d)")
-	week := fs.Int("week", 0, "Week number")
-	month := fs.Int("month", 0, "Month number")
+	week := fs.Int("week", -1, "Week number (-1 = no filter, 0 = current week)")
+	month := fs.Int("month", -1, "Month number (-1 = no filter, 0 = current month)")
 	all := fs.Bool("all", false, "Show all entries")
 
-	fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		fmt.Printf("Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Handle 0 as "current period"
+	if *week == 0 || *month == 0 {
+		doc, err := readDocForDates()
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		if *week == 0 {
+			*week = brag.GetCurrentWeek(doc.RoleStartDate)
+		}
+		if *month == 0 {
+			*month = brag.GetCurrentMonth(doc.RoleStartDate)
+		}
+	}
+
+	// Convert -1 back to 0 for "no filter"
+	if *week == -1 {
+		*week = 0
+	}
+	if *month == -1 {
+		*month = 0
+	}
 
 	if err := brag.ListEntries(*rangeStr, *week, *month, *all); err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -171,16 +431,179 @@ func handleList() {
 func handleReport() {
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
 	rangeStr := fs.String("range", "", "Time range (e.g., 90d)")
-	week := fs.Int("week", 0, "Week number")
-	month := fs.Int("month", 0, "Month number")
-	year := fs.Int("year", 0, "Year number")
+	week := fs.Int("week", -1, "Week number (-1 = no filter, 0 = current week)")
+	month := fs.Int("month", -1, "Month number (-1 = no filter, 0 = current month)")
+	year := fs.Int("year", -1, "Year number (-1 = no filter, 0 = current year)")
 
-	fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		fmt.Printf("Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Handle 0 as "current period"
+	if *week == 0 || *month == 0 || *year == 0 {
+		doc, err := readDocForDates()
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		if *week == 0 {
+			*week = brag.GetCurrentWeek(doc.RoleStartDate)
+		}
+		if *month == 0 {
+			*month = brag.GetCurrentMonth(doc.RoleStartDate)
+		}
+		if *year == 0 {
+			*year = brag.GetCurrentYear(doc.RoleStartDate)
+		}
+	}
+
+	// Convert -1 back to 0 for "no filter"
+	if *week == -1 {
+		*week = 0
+	}
+	if *month == -1 {
+		*month = 0
+	}
+	if *year == -1 {
+		*year = 0
+	}
 
 	if err := brag.ReportEntries(*rangeStr, *week, *month, *year); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func handleReview() {
+	entries, err := brag.GetIncompleteEntries()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(entries) == 0 {
+		fmt.Println("🎉 All entries are 100% complete!")
+		return
+	}
+
+	fmt.Printf("Found %d incomplete entries:\n\n", len(entries))
+
+	for _, entry := range entries {
+		completeness := entry.CalculateCompleteness()
+
+		fmt.Printf("Entry #%d [%s] [%s] - %d%% complete\n", entry.ID, entry.Bucket, entry.Status, completeness)
+		fmt.Printf("  %s\n", entry.Description)
+		fmt.Println()
+
+		// Show what's present and what's missing
+		fmt.Println("  Fields:")
+		if entry.Description != "" {
+			fmt.Println("    ✓ Description")
+		}
+		if entry.Evidence != "" && entry.Evidence != "[missing]" {
+			fmt.Println("    ✓ Evidence")
+		} else {
+			fmt.Println("    ✗ Evidence missing")
+		}
+		if entry.HoursSaved != nil {
+			fmt.Println("    ✓ Hours saved")
+		} else {
+			fmt.Println("    ✗ Hours saved missing")
+		}
+		if entry.BusinessMetric != "" {
+			fmt.Println("    ✓ Business metric")
+		} else {
+			fmt.Println("    ✗ Business metric missing")
+		}
+		if entry.StrategicAlign != "" {
+			fmt.Println("    ✓ Strategic alignment")
+		} else {
+			fmt.Println("    ✗ Strategic alignment missing")
+		}
+		if entry.PeerRecognition != "" {
+			fmt.Println("    ✓ Peer recognition")
+		} else {
+			fmt.Println("    ✗ Peer recognition missing")
+		}
+		fmt.Println()
+
+		// Ask if they want to enrich now
+		var enrichNow bool
+		enrichPrompt := &survey.Confirm{
+			Message: "Improve this entry now?",
+			Default: false,
+		}
+		if err := survey.AskOne(enrichPrompt, &enrichNow); err != nil {
+			continue
+		}
+
+		if !enrichNow {
+			continue
+		}
+
+		// Enrich missing fields only
+
+		// Prompt for status update first
+		newStatus := promptStatusUpdate(entry.Status)
+		if newStatus != "" {
+			if err := brag.UpdateEntry(entry.ID, "", "", "", newStatus, time.Time{}, time.Time{}); err != nil {
+				fmt.Printf("Error updating status: %v\n", err)
+			} else {
+				fmt.Printf("Status updated to '%s'\n", newStatus)
+			}
+		}
+
+		var evidence string
+		if entry.Evidence == "" || entry.Evidence == "[missing]" {
+			evidence = promptEvidenceWithValidation()
+		}
+
+		var hoursSaved *float64
+		var hoursSavedCalc string
+		if entry.HoursSaved == nil {
+			hoursSaved, hoursSavedCalc = promptHoursSaved()
+		}
+
+		var businessMetric string
+		if entry.BusinessMetric == "" {
+			if entry.Bucket == bucketProcess {
+				businessMetric = promptRequiredBusinessMetric(entry.Bucket)
+			} else {
+				businessMetric = promptBusinessMetric(entry.Bucket)
+			}
+		}
+
+		var strategicAlign string
+		if entry.StrategicAlign == "" {
+			strategicAlign = promptStrategicAlign()
+		}
+
+		var peerRecognition string
+		if entry.PeerRecognition == "" {
+			if entry.Bucket == bucketLeadership {
+				peerRecognition = promptRequiredPeerRecognition()
+			} else {
+				peerRecognition = promptPeerRecognition()
+			}
+		}
+
+		// Validate
+		if !validateEnrichment(entry.Bucket, businessMetric, peerRecognition) {
+			fmt.Println("Skipped.")
+			continue
+		}
+
+		if err := brag.EnrichEntry(entry.ID, evidence, hoursSaved, hoursSavedCalc, businessMetric, strategicAlign, peerRecognition); err != nil {
+			fmt.Printf("Error enriching entry: %v\n", err)
+			continue
+		}
+
+		fmt.Println("✓ Entry improved!")
+		fmt.Println()
+	}
+
+	fmt.Println("Review complete.")
 }
 
 func handleRemove() {
@@ -230,7 +653,10 @@ func handleExport() {
 	month := fs.Int("month", 0, "Month number")
 	all := fs.Bool("all", false, "Export all entries")
 
-	fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		fmt.Printf("Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
 
 	if err := brag.ExportEntries(*format, *rangeStr, *week, *month, *all); err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -284,6 +710,8 @@ func handleHelp() {
 	switch command {
 	case "add":
 		printAddHelp()
+	case "update":
+		printUpdateHelp()
 	case "enrich":
 		printEnrichHelp()
 	case "list":

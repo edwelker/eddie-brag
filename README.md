@@ -30,6 +30,7 @@ go install ./cmd/brag
 ```bash
 # One-time setup
 brag init
+# Enter your role title (e.g., Staff Software Engineer)
 # Enter your role start date (YYYY-MM-DD)
 
 # Daily: log an accomplishment
@@ -107,6 +108,7 @@ brag export --format json --all
 - Every write auto-commits and pushes to `edwelker/brag-data` (private repo)
 - Full git history means you can recover from corruption or accidental edits
 - If offline: commits locally, retries push on next write
+- **Role changes:** When promoted or changing companies, archive the current file (`mv brag.json brag-staff-engineer-2024.json`) and run `brag init` again to start fresh with your new role title
 
 ## Zsh Aliases
 

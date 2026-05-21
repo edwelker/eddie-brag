@@ -1,0 +1,36 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck      # Check for unchecked errors
+    - gosimple      # Simplify code
+    - govet         # Official Go static analyzer
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Go static analysis
+    - unused        # Check for unused code
+    - gofmt         # Format enforcement
+    - goimports     # Import formatting
+    - misspell      # Spelling
+    - revive        # Drop-in golint replacement
+    - goconst       # Repeated strings → constants
+    - unconvert     # Unnecessary type conversions
+
+linters-settings:
+  errcheck:
+    check-blank: true
+
+  gofmt:
+    simplify: true
+
+  revive:
+    confidence: 0.8
+
+issues:
+  exclude-rules:
+    # Allow unused parameters in test helpers
+    - path: _test\.go
+      linters:
+        - unused
+        - revive

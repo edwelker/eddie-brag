@@ -19,3 +19,9 @@
 
 # Go workspace file
 go.work
+
+# Compiled binary
+/brag
+
+# Claude Code local config
+.claude/

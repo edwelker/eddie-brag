@@ -18,12 +18,16 @@ func main() {
 		handleInit()
 	case "add":
 		handleAdd()
+	case "update":
+		handleUpdate()
 	case "enrich":
 		handleEnrich()
 	case "list":
 		handleList()
 	case "report":
 		handleReport()
+	case "review":
+		handleReview()
 	case "remove":
 		handleRemove()
 	case "clear":
